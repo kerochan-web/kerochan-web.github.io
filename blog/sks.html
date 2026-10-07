@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kerochan.lol</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body class="blog">
+  <header>
+    <nav>
+      <a href="../index.html">Home</a>
+      <a href="../services.html">Services</a>
+      <a href="../blog.html">Blog</a>
+      <a href="https://github.com/kerochan-web/">GitHub</a>
+      <a href="../contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Case Study: Stop Killing Scientists - Advocacy Platform</h1>
+	<h2>Client</h2>
+	<p><a href="https://wiki.seg.org/wiki/Luc_T._Ikelle">Dr. Luc Thomas Ikelle</a> - former Texas A&M professor and SEG award recipient</p>
+    <h2>Project Overview</h2>
+    <p>Dr. Ikelle, a former Texas A&M professor and SEG award recipient, needed a digital platform to launch an international petition calling for protocols to protect scientists during conflicts.</p>
+    <p>The site needed to collect and verify signatures from a global audience, display social proof through recent supporter lists and stats, accept donations through multiple payment methods, and communicate serious subject matter appropriately.</p>
+	<p>But some constraints include a limited budget (WordPress+HostGator) and how such a sensitive subject needs a professional / credible presentation.</p>
+	<h2>Solution</h2>
+	<p>The petition targets the <b>academic community</b>, <b>policy makers</b> and international organizations, as well as the <b>general public</b> concerned with humanitarian issues.</p>
+	<p>A good petition platform would require trust signals (credentials, transparency, etc.), conversion optimization (clear CTAs), and social proof mechanisms (recent signatures with geographic distribution). Its design should also be <b>professional over emotional</b> with a <b>clear hierarchy</b>. It should also be <b>mobile-responsive</b> with a readable typography so that it can be accessible.</p>
+	<h2>What I Built</h2>
+    <p>Dr. Ikelle had <b>WordPress</b> and wanted a robust plugin ecosystem for future content updates, but I've also implemented a custom development with PHP to avoid page builder bloat.</p>
+	<p>The architecture is as follows:</p>
+	<p><b>Frontend:</b></p>
+    <ul>
+        <li>Custom HTML/CSS (mobile-first responsive)</li>
+        <li>Vanilla JavaScript (lightweight, no jQuery dependency)</li>
+        <li>Optimized images and lazy loading</li>
+    </ul>
+	<p><b>Backend:</b></p>
+	<ul>
+		<li>WordPress 6.7</li>
+		<li>Forminator (form handling + DB storage)</li>
+		<li>Custom PHP functions (signature display, stats calculation)</li>
+		<li>PayPal API integration (donations)</li>
+	</ul>
+	<p><b>Database:</b></p>
+	<ul>
+		<li>Signature storage with fields: name, email, country, affiliation, timestamp</li>
+		<li>Email verification system to prevent spam</li>
+		<li>Privacy controls (public display opt-in)</li>
+	</ul>
+	<h2>Results</h2>
+	<p>Our website build includes the following:</p>
+	<ul>
+		<li>Multi-step petition form with privacy checkboxes and spam prevention (through IP tracking).</li>
+		<li>Real-time social proof showing a live signature counter, recent 5-10 signature shown, and a "View All Signatures" page with pagination.</li>
+		<li>PayPal donation button with guest checkout that supports credit/debit cards without PayPal account + direct deposit for tax compliance.</li>
+		<li>Copy-to-clipboard functionality in "About" to increase organic reach and signature growth.</li>
+		<li>Simple structure: Homepage, About, Contact, Privacy Policy, Terms of Use, All Signatures.</li>
+	</ul>
+	<h2>Design Process</h2>
+	<p>I started by creating initial mockups using HTML/CSS (no Figma needed):</p>
+	<ul>
+		<li>Hero section with impactful imagery</li>
+		<li>Problem statement in digestible paragraphs</li>
+		<li>Prominent petition form</li>
+		<li>Social proof elements</li>
+		<li>Donation section</li>
+	</ul>
+	<p><b>Iteration 1:</b> Client requested larger logo, lighter background images in content section</p>
+	<p><b>Iteration 2:</b> Adjusted image opacity to 10-15% for text readability</p>
+	<p><b>Final:</b> Approved design ready for WordPress implementation</p>
+	<p>I also used professional, urgent-but-not-harsh color palette (<span style="background-color: #1a2332; color: white;">navy blue</span>, <span style="background-color: #c41e3a; color: white;">muted crimson</span>, <span style="background-color: #f8f9fa;">off-white</span>, and <span style="background-color: #2c3e50; color: white;">dark gray</span>), a readable and authoritative typography (Playfair Display Bold headings, Source Sans Pro body), some imagery (background of a globe with peace symbol in the hero, subtle watermarks of bombed cities with 10% opacity, and a clean iMODE Research logo branding), and of course a mobile-responsive design.</p>
+	<p>Some images of the site:</p>
+    <img src="assets/sks/about.png" alt="About page">
+    <img src="assets/sks/founder.png" alt="About the founder">
+    <img src="assets/sks/intro.png" alt="Privacy Policy">
+	<p>This project focused on delivering a professional platform that gave credibility to the client's international advocacy campaign within a budget and a timeline, despite some complex requirements I've found along the way.</p>
+	<p>See website <a href="https://stopkillingscientists.org">here</a>.</p>
+  </main>
+</body>
+</html>

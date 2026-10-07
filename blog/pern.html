@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kerochan.lol</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body class="blog">
+  <header>
+    <nav>
+      <a href="../index.html">Home</a>
+      <a href="../services.html">Services</a>
+      <a href="../blog.html">Blog</a>
+      <a href="https://github.com/kerochan-web/">GitHub</a>
+      <a href="../contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Designing a Booking System That Fails Safely Under Concurrency</h1>
+    <img src="assets/pern/homepage.png" alt="Home page">
+	<h2>Problem</h2>
+    <p>Booking systems are inherently vulnerable to race conditions, where multiple users attempt to reserve the same time slot simultaneously. Without proper safeguards, this leads to double-booking (i.e. two confirmed reservations for a single slot) which breaks data integrity and creates real-world conflicts (e.g. overlapping appointments, lost revenue, or manual reconciliation).</p>
+    <p>This issue becomes more likely under concurrent traffic, where application-level checks alone cannot guarantee consistency. Even at small scale, a single conflicting booking can undermine trust in the system, since users expect availability to be accurate and final.</p>
+    <p>In addition, authentication systems are a common attack surface in web applications. Weak or improperly enforced authentication can allow unauthorized access to protected routes, leading to data exposure or unauthorized actions such as booking or modifying appointments.</p>
+    <h2>Constraints</h2>
+    <p>This project was designed under a set of practical constraints to keep the system focused and deployable as a single service.</p>
+    <ul>
+        <li>The backend was designed as a <b>stateless REST API</b> to support a SPA frontend. This ruled out server-side session storage and influenced the choice of <b>JWT-based authentication</b>.</li>
+        <li>The system avoids external dependencies such as Redis, message queues, or distributed locking systems. All core guarantees (such as concurrency control) had to be enforced using <b>PostgreSQL</b> and application logic alone.</li>
+        <li>The application is deployed as a <b>monolith</b> (Node.js + PostgreSQL) behind <b>Nginx</b>. While simple, this setup still needed to handle concurrent requests safely without relying on horizontal scaling mechanisms.</li>
+        <li>The domain (users, time slots, bookings) has clear relationships and integrity requirements. This made a <b>relational database</b> a better fit than NoSQL alternatives.</li>
+        <li>Lightweight tools (<b>Express, Vite + React</b>) were chosen over more opinionated frameworks to maintain full control over request flow, middleware, and database interactions.</li>
+    </ul>
+    <p>These constraints intentionally prioritize correctness and clarity over scalability features such as distributed locking or microservices.</p>
+    <h2>Key decisions</h2>
+    <h3>Concurrency Control (Database-Enforced Consistency)</h3>
+    <p>The primary risk in a booking system is <b>double-booking</b> caused by concurrent requests. A naive approach (checking availability before inserting a booking) introduces a <b>race condition</b> where multiple requests can pass validation simultaneously.</p>
+    <p>To eliminate this class of bugs, concurrency control is enforced at the <b>database level</b> using a <b>UNIQUE</b> constraint on <b>time_slot_id</b> in the bookings table.</p>
+    <p>This guarantees:</p>
+    <ul>
+        <li>Only one booking for a given slot can ever be committed</li>
+        <li>Conflicts are resolved atomically within the database</li>
+        <li>The system fails safely (<b>409 Conflict</b>) instead of entering an inconsistent state</li>
+    </ul>
+    <p>Application-level checks are still used for user feedback, but correctness does not depend on them.</p>
+    <p>Alternatives such as in-memory locks or distributed locking (e.g. Redis) were not used due to added complexity and failure modes (lock expiry, synchronization issues). The database constraint provides a simpler and more reliable guarantee under the given constraints.</p>
+    <h3>Authentication Strategy (JWT-Based Stateless Auth)</h3>
+    <p>Authentication is implemented using <b>JSON Web Tokens (JWT)</b>, with tokens issued upon successful login and validated via middleware on protected routes.</p>
+    <p>This approach was chosen to support a stateless API design:</p>
+    <ul>
+        <li>No server-side session storage is required</li>
+        <li>Requests can be authenticated independently</li>
+        <li>The system is easier to scale horizontally if needed</li>
+    </ul>
+    <p>Trade-offs:</p>
+    <ul>
+        <li>Tokens cannot be easily revoked before expiration</li>
+        <li>Token storage introduces security considerations (see Limitations)</li>
+    </ul>
+    <p>Despite these limitations, JWT provides a clean separation between the frontend (SPA) and backend API, and aligns with the constraint of minimal infrastructure.</p>
+    <h3>Technology Stack (PERN)</h3>
+    <p>The <b>PERN stack</b> (PostgreSQL, Express, React, Node.js) was selected to balance simplicity, control, and data integrity.</p>
+    <ul>
+        <li><b>PostgreSQL</b>: chosen for strong ACID guarantees and support for relational constraints, which are critical for enforcing booking consistency</li>
+        <li><b>Express</b>: minimal framework allowing explicit control over middleware and request handling</li>
+        <li><b>React (Vite)</b>: lightweight SPA frontend with fast development and simple integration with the API</li>
+        <li><b>Node.js</b>: unified language across the stack, reducing context switching</li>
+    </ul>
+    <p>Heavier abstractions (e.g. full-stack frameworks or opinionated backends) were intentionally avoided to keep the system transparent and focused on core backend concerns such as concurrency and authentication.</p>
+    <h3>Rate Limiting (Abuse Mitigation)</h3>
+    <p>Rate limiting is applied to authentication endpoints (login) to reduce the risk of brute-force attacks.</p>
+    <p>This limits repeated <b>failed login attempts</b> from the same client and provides a basic layer of abuse protection without introducing external infrastructure.</p>
+    <p>The scope of rate limiting is intentionally limited and does not yet cover all endpoints (see <b>Limitations</b>).</p>
+    <h2>Failure Scenarios</h2>
+    <h3>Simultaneous Booking Requests (Race Condition)</h3>
+    <p>When multiple users attempt to book the same time slot at the same time, all requests reach the backend and attempt to insert a booking.</p>
+    <ul>
+        <li>The first transaction succeeds and commits</li>
+        <li>Subsequent transactions violate the <b>UNIQUE(time_slot_id)</b> constraint</li>
+        <li>The API returns a <b>409 Conflict</b> response</li>
+    </ul>
+    <p>Correctness does not depend on request timing or application logic. The database enforces a <b>single valid state</b>, ensuring double-booking cannot occur.</p>
+    <h3>Invalid or Missing Authentication (Unauthorized Access)</h3>
+    <p>Requests to protected routes without a valid JWT are intercepted by authentication middleware.</p>
+    <ul>
+        <li>Missing or malformed tokens result in <b>401 Unauthorized</b></li>
+        <li>Valid tokens without sufficient privileges (e.g. non-admin users accessing admin routes) result in <b>403 Forbidden</b></li>
+    </ul>
+    <p>This ensures that only authenticated users can access booking functionality, and role-based restrictions are enforced consistently.</p>
+    <h3>Duplicate Registration Attempts</h3>
+    <p>If a user attempts to register with an email that already exists:</p>
+    <ul>
+        <li>The database rejects the insert (unique email constraint)</li>
+        <li>The API returns an appropriate error response</li>
+    </ul>
+    <p>This prevents account duplication and ensures identity consistency.</p>
+    <h3>Brute Force Login Attempts</h3>
+    <p>Repeated login attempts from the same client are limited by rate limiting:</p>
+    <ul>
+        <li>Excessive requests are blocked after a threshold</li>
+        <li>This slows down credential stuffing or brute-force attacks</li>
+    </ul>
+    <p>However, this protection currently applies only to login endpoints (see <b>Limitations</b>).</p>
+    <h3>Token Expiry or Invalid Token Use</h3>
+    <p>If a JWT is expired or tampered with:</p>
+    <ul>
+        <li>Verification fails in <b>middleware</b></li>
+        <li>The request is rejected with <b>401 Unauthorized</b></li>
+    </ul>
+    <p>This ensures that only valid, untampered tokens can be used to access protected resources.</p>
+    <h3>Client-Side Token Exposure (XSS Scenario)</h3>
+    <p>If an attacker successfully injects JavaScript into the frontend (XSS):</p>
+    <ul>
+        <li>The script can read tokens stored in <b>localStorage</b></li>
+        <li>The attacker can impersonate the user until the token expires</li>
+    </ul>
+    <p>This does not break server-side correctness, but compromises user accounts. This risk exists due to the chosen token storage strategy (see <b>Limitations</b>).</p>
+    <h3>Abuse via Repeated Booking/Unbooking</h3>
+    <p>A user could repeatedly book and cancel the same slot:</p>
+    <ul>
+        <li>This does not violate data integrity</li>
+        <li>However, it could create unnecessary load or disrupt availability</li>
+    </ul>
+    <p>No rate limiting or abuse detection is currently applied to booking endpoints, making this a potential area for improvement.</p>
+    <p>These scenarios were tested using concurrent requests and manual API testing (curl/Postman) to verify correct behavior under failure conditions.</p>
+    <h2>Limitations and Trade-offs</h2>
+    <p>JWTs are stored in <b>localStorage</b>, which makes them accessible to JavaScript running in the browser.</p>
+    <ul>
+        <li>This introduces risk of token theft in the event of an <b>XSS vulnerability</b></li>
+        <li>An attacker could impersonate a user until the token expires</li>
+    </ul>
+    <p>This approach was chosen for simplicity in a SPA context. A more secure production setup would use <b>HTTP-only cookies with CSRF protection</b> and <b>stricter frontend input sanitization</b>.</p>
+    <h3>Limited Rate Limiting Scope</h3>
+    <p>Rate limiting is only applied to login endpoints.</p>
+    <ul>
+        <li>Other routes (e.g. registration, booking actions) are <b>not</b> protected against abuse</li>
+        <li>This leaves room for spam or resource exhaustion attacks</li>
+    </ul>
+    <p>Extending rate limiting or introducing per-user/action-based throttling would improve resilience.</p>
+    <h3>No Abuse Protection for Booking Behavior</h3>
+    <p>The system allows repeated booking and cancellation actions.</p>
+    <ul>
+        <li>While data integrity is preserved, this could be abused to create load or disrupt availability</li>
+        <li>No safeguards exist for excessive or automated usage patterns</li>
+    </ul>
+    <p>Mitigation could include action-based rate limiting, cooldowns, or anomaly detection.</p>
+    <h3>Stateless Auth Trade-offs</h3>
+    <p>Using JWT enables a stateless API but introduces limitations:</p>
+    <ul>
+        <li>No centralized session invalidation</li>
+        <li>Harder to enforce logout across devices</li>
+    </ul>
+    <p>This trade-off was accepted to keep the architecture simple and avoid additional infrastructure (e.g. session stores).</p>
+    <h3>Monolithic Deployment Constraints</h3>
+    <p>The application is deployed as a single Node.js service with PostgreSQL.</p>
+    <ul>
+        <li>While sufficient for this scope, it lacks horizontal scaling and fault isolation</li>
+        <li>All responsibilities (API, auth, business logic) are tightly coupled</li>
+    </ul>
+    <p>Future improvements could include service separation or scaling strategies if load increases.</p>
+    <p>By the end, I ensured that the frontend worked fine as it had some alignment issues, made users automatically redirect to login if they click on a booking, and finally hosted the monolith using <b>PM2</b> and a reverse <b>Nginx</b> proxy.</p>
+	<p>You can take a look at the <a href="https://files.catbox.moe/8ucz4e.webm">demo video</a> or the <a href="https://git.kerochan.lol/appointment-platform/file/README.html">project's <b>README</b></a>.</p>
+  </main>
+</body>
+</html>

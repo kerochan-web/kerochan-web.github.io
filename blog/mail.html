@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kerochan.lol</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body class="blog">
+  <header>
+    <nav>
+      <a href="../index.html">Home</a>
+      <a href="../services.html">Services</a>
+      <a href="../blog.html">Blog</a>
+      <a href="https://github.com/kerochan-web/">GitHub</a>
+      <a href="../contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Setting Up Biz Email With Privacy + Custom Domain</h1>
+    <h2>Problem</h2>
+    <p>It's pretty common to see the "easy" Gmail being used by almost everyone including businesses. But both the data and deliverability aren't yours, and you might even lack your brand-related domain name on your email along with portability as well.</p>
+    <h2>Solution</h2>
+    <p>We'll be using the privacy-respecting <a href="https://migadu.com">Migadu</a> as our host with <b>kerochan.lol</b> as our custom domain in this example (which is already used in my own site, as you can see), but also add some auth with SFP+DKIM+DMARC, integrity (PGP-signed mail), and security (DNSSEC).</p>
+    <p>Let's assume we're running a Debian system, own a domain name (assume it's <b>kerochan.lol</b>), and have a Migadu account. Let's install the prereqs:</p>
+    <pre>sudo apt install -y gnupg2 dig</pre>
+    <p>Now we go to the Migadu Dashboard and add a domain:</p>
+    <img src="assets/mail/domain.png" alt="Add New Email Domain.">
+    <p>Then we'll copy exact DNS records from Migadu in the next step. It's simple copy-pasting really as the Dashboard would show you everything to do there.</p>
+    <p>We'll be adding DNS records to our domain registrar (e.g., Porkbun) from the Migadu Dashboard, mainly MX (mail routing), SPF (who can send), DKIM (cryptographic signing), and DMARC (for reporting, optional but recommended).</p>
+    <img src="assets/mail/records.png" alt="A bunch of records copy-pasted from Migadu Dashboard to Porkbun.">
+    <p><center>A bunch of records copy-pasted from Migadu Dashboard to Porkbun.</center></p>
+    <p>After we save our changes and DNS propagates in a few minutes or so, we verify from the terminal:</p>
+    <pre>lain@navi:~$ dig +short MX kerochan.lol
+dig +short TXT kerochan.lol                               
+dig +short TXT _dmarc.kerochan.lol # if DMARC added            
+dig +short s1._domainkey.kerochan.lol TXT
+dig +short s1._domainkey.kerochan.lol CNAME
+10 aspmx1.migadu.com.
+20 aspmx2.migadu.com.
+"hosted-email-verify=caun2ch2"
+"v=spf1 include:spf.migadu.com -all"
+"v=DMARC1; p=quarantine;"</pre>
+    <p>We can then also enable DNSSEC for <b>kerochan.lol</b> in our DNS provider, which generates a DS record. We paste that DS in our registrar (if using external DNS), and verify:</p>
+    <pre>lain@navi:~$ dig +dnssec kerochan.lol DS
+
+; <<>> DiG 9.18.33-1~deb12u2-Debian <<>> +dnssec kerochan.lol DS
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 17380
+;; flags: qr rd ra ad; QUERY: 1, ANSWER: 0, AUTHORITY: 4, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags: do; udp: 1232
+;; QUESTION SECTION:
+;kerochan.lol.			IN	DS
+
+;; AUTHORITY SECTION:
+lol.			900	IN	SOA	ns0.centralnic.net. hostmaster.centralnic.net. 1757082140 900 1800 6048000 3600
+kerochan.lol.		900	IN	NSEC	keroisrealgold.lol. NS RRSIG NSEC
+lol.			900	IN	RRSIG	SOA 13 1 900 20251005142220 20250905125220 26505 lol. i8Amdxo5YUY0FIj9mmSWmvVFTpZZiB4t/ITeuu2aiOLitvq1ZNbCbGpB iAnKX7zaWC4Cu84K2e5kQWw+Z1ClEQ==
+kerochan.lol.		900	IN	RRSIG	NSEC 13 2 900 20250915114757 20250816101757 26505 lol. a6wlxpKRyV2Ar5NHiSMlhubXXg49lLjzWYd4fjuTI9dWgXMhIrc5bVkl uh9iMqjqeDprTdEUy0W/DedQMn/U/w==
+
+;; Query time: 60 msec
+;; SERVER: 10.2.0.1#53(10.2.0.1) (UDP)
+;; WHEN: Fri Sep 05 15:23:35 CET 2025
+;; MSG SIZE  rcvd: 344
+
+</pre>
+    <p>Now we can set up our mail client and send a test. We'll use the simple and open-source <b>Thunderbird</b> (or NeoMutt) for this:</p>
+    <p>To add an account, use Migadu's IMAP <b>imap.migadu.com:993</b> and SMTP <b>smtp.migadu.com:465</b>, set SSL/TLS for security, and keep authentication as "Normal password". Then we can finally send an plain text email from such new account me made (<b>contact&lt;at>kerochan&lt;dot>lol</b>) to a non-Migadu address we control.</p>
+    <img src="assets/mail/test.png" alt="Received original message from our email showing PASS for all of SFP, DKIM, and DMARC.">
+    <p><center>Received original message from our email <b>contact&lt;at>kerochan&lt;dot>lol</b> showing PASS for all of SFP, DKIM, and DMARC.</center></p>
+    <p>We'll then generate a modern ECC key to support encryption and to sign our emails:</p>
+<pre># Primary key (sign/certify), 1-year expiry:
+gpg --quick-generate-key "contact@kerochan.lol" ed25519 sign 1y
+
+# Add encryption subkey:
+gpg --quick-add-key contact@kerochan.lol cv25519 encrypt 1y
+
+# Export public key to share:
+gpg --armor --export contact@kerochan.lol > pubkey.asc
+
+# Create a revocation certificate and store it offline:
+gpg --output revoke-contact.asc --gen-revoke contact@kerochan.lol
+</pre>
+    <p>Back to Thunderbird, we'll go to Account Settings -> End-to-End Encryption -> Add Key -> Use my existing key -> and pick the one you just made. Also check "Digitally sign messages by default".</p>
+    <p>Finally, we test it by sending an email to ourselves. Here's the result (I've set it up on NeoMutt):</p>
+    <img src="assets/mail/message.png" alt="Received email with good signature.">
+    <p>Optionally, we can also add our key via WKD to let clients auto-discover the key at <b>https://kerochan.lol/.well-known/openpgpkey/&lt;some-hash></b>. But it's out of scope in this blog post; a tutorial on setting it up can be found <a href="https://www.uriports.com/blog/setting-up-openpgp-web-key-directory/">here</a>.</p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kerochan.lol</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body class="blog">
+  <header>
+    <nav>
+      <a href="../index.html">Home</a>
+      <a href="../services.html">Services</a>
+      <a href="../blog.html">Blog</a>
+      <a href="https://github.com/kerochan-web/">GitHub</a>
+      <a href="../contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Designing Closed-Loop Operational Automation and Safety Boundaries for Enterprise SRE Environments</h1>
+	<h2>Problem</h2>
+    <p>In production environments, automation is a double-edged sword. Traditional infrastructure scripts - such as simple cron jobs, event-driven webhook runners, or basic alert handlers - typically operate as open-loop systems. They detect a failure condition, fire a remediation command (e.g., restarting a service or clearing a disk space threshold), and immediately exit.</p>
+    <pre>[Open-Loop Lifecycle]
+ Alerts Engine --> Triggers Script --> Executes Bash Command --> [Blind Termination]</pre>
+    <p>This open-loop design introduces critical architectural hazards:</p>
+    <ul>
+        <li><b>False Recovery Assertions:</b> The automation assumes success if the underlying shell command exits with status <b>0</b>. It does not confirm that the application layer is actually healthy and serving traffic over the network.</li>
+        <li><b>The Cascading Failure Vector:</b> If an application is failing due to a poisoned database connection pool or misconfigured upstream dependencies, repeatedly forcing restarts can overload downstream networks, corrupt local filesystems, or mask the root cause of an outage.</li>
+    </ul>
+    <p><b>sentinel</b> was designed to answer a fundamental operational question: <b>How can automated remediation safely interact with production infrastructure without introducing cascading system failures?</b></p>
+    <h2>Closed-Loop Operational Lifecycle</h2>
+    <p>To prevent automated scripts from blinding themselves to runtime realities, <b>sentinel</b> utilizes a strict <b>closed-loop feedback system</b>. A remediation event is treated not as a one-shot execution, but as a multi-stage lifecycle that locks the tracking state until the system returns to a deterministic baseline.</p>
+    <pre>       +-------------------------------------------------+
+       |                                                 |
+       v                                                 |
+[Active Monitoring] ---> [Failure Detected]              | (If Unhealthy,
+       ^                         |                       |  Increment Retries)
+       |                         v                       |
+       |                 [Open ITSM Ticket]              |
+       |                         |                       |
+       |                         v                       |
+       |                [Execute Remediation]            |
+       |                         |                       |
+       |                         v                       |
+       |               [Stabilization Pause]             |
+       |                         |                       |
+       |                         v                       |
+       +----------- [Post-Remediation Verification] -----+
+                         |
+                         | (If Verified Healthy)
+                         v
+                 [Resolve ITSM Ticket]</pre>
+    <h3>Closed-Loop Pipeline Steps</h3>
+    <ol>
+        <li><b>Detection:</b> Continuous active probing identifies a target degradation or outage.</li>
+        <li><b>ITSM Synchronization:</b> Before any remediation executes, a persistent tracking context is initialized by dispatching a structured incident registration request to an upstream IT Service Management (ITSM) layer or ticketing gateway.</li>
+        <li><b>Execution:</b> The constrained remediation action runs under strict boundaries.</li>
+        <li><b>Stabilization Window:</b> The system enforces a mandatory, configuration-driven time hold to allow processes to complete initialization, clear memory pools, or bind to local network sockets.</li>
+        <li><b>Post-Remediation Verification:</b> Rather than trusting the subshell exit code, the platform executes a dedicated secondary health check directly against the application layer. If this active verification passes, the incident ticket is automatically resolved. If it fails, the system transitions to a defensive failure mode rather than retrying blindly.</li>
+    </ol>
+    <img src="assets/sentinel/itsm.png" alt="Outbound ITSM JSON Incident Payload showing auto-created ticket in an Active state">
+    <h2>Safety Model and Blast Radius Mitigation</h2>
+    <p>Allowing a background management daemon to execute commands with elevated host privileges introduces extreme operational risk. A minor template misconfiguration, an empty variable interpolation, or a compromised configuration block can easily lead to unintended data loss or platform-wide disruption.</p>
+    <p><b>sentinel</b> mitigates this blast radius by implementing two decoupled, pre-flight safety boundaries directly inside the execution engine.</p>
+    <pre>                                      [Lexical Command Parser]
+                                                 |
+                                     (Matches Dangerous Token?)
+                                      /                      \
+                                    YES                       NO
+                                    /                           \
+                                   v                             v
+                    [CRITICAL_SAFETY_VIOLATION]         [Initialize Kernel Timeout]
+                    - Abort Shell Execution                          |
+                    - Trip Circuit Breaker                  [Execute Subprocess]
+                    - Append Append-Only Audit Log                   |
+                                                       (Exceeds 5-Second Threshold?)
+                                                        /                        \
+                                                      YES                         NO
+                                                      /                             \
+                                                     v                               v
+                                              [SIGKILL Emitted]              [Normal Post-Check]</pre>
+    <h3>Lexical Pre-Flight Scanning vs. Raw Shell Evaluation</h3>
+    <p>Before a string ever hits the operating system's command interpreter, it is intercepted by a lexical compliance engine. The engine tokenizes the planned instruction and evaluates it against an explicit blocklist of destructive command primitives (e.g., structural file removals, disk formatting utilities, raw block-device manipulation tools).</p>
+    <p>If a safety violation is flagged:</p>
+    <ul>
+        <li>The command is aborted before fork execution occurs.</li>
+        <li>A <b>CRITICAL_SAFETY_VIOLATION</b> event is instantly written to an append-only audit log.</li>
+        <li>The system opens its internal circuit breaker, entirely blocking all automated actions across the host until an operator manually intervenes.</li>
+    </ul>
+    <h3>Bounded Execution Contexts</h3>
+    <p>Any approved script execution is wrapped inside a kernel-level bounded execution context. The runtime enforces an absolute execution threshold (configured to a strict 5-second maximum).</p>
+    <p>If a remediation script hangs due to a locked file descriptor, an unreachable network route, or an unexpected prompt for user input, the host environment issues a definitive termination signal to the process group. This constraint prevents worker threads from blocking indefinitely and guarantees that automation tools cannot cause local resource exhaustion or process starvation.</p>
+    <img src="assets/sentinel/logs.png" alt="Administrative Terminal logs displaying an blocked execution chain with a 'CRITICAL_SAFETY_VIOLATION' warning and subsequent circuit-breaker activation alert">
+    <h2>Failure Modes and Bounded State Management</h2>
+    <p>When automation systems fail, they often do so due to a complete loss of execution context. If a management daemon lacks persistent memory of its historical attempts, a simple system reboot, host supervisor cycle, or container crash will reset its trial counters to zero. This leads directly to <b>retry-storming</b> upon daemon initialization.</p>
+    <pre>[The Danger of State Erasure / Retry Storms]
+Daemon Crash ---> Memory Reset (Retries = 0) ---> Daemon Starts ---> Re-executes Failing Script Loop</pre>
+    <h3>Trade-Off: Local SQLite vs. Enterprise Distributed Data Stores</h3>
+    <p>To eliminate retry storms, the system must retain its execution counters permanently across daemon restarts.</p>
+    <ul>
+        <li><b>The Design Decision:</b> For this architecture, <b>SQLite</b> was selected due to its ultra-low operational overhead, zero-dependency deployment profile, and deterministic embedded state management. It provides ACID-compliant transactions directly on local disk, ensuring that if the host suffers a sudden hard power loss, the historical tally of failed remediation attempts is accurately preserved.</li>
+        <li><b>The Enterprise Trade-off:</b> In a distributed, multi-node enterprise environment, relying on a localized single-file database limits horizontal scalability and creates a single point of failure per node. In a large production scale-out, this role would be delegated to a central <b>PostgreSQL</b> instance, a highly-available cloud-native key-value store, or integrated directly into an existing CMDB/ITSM persistence layer to synchronize operational history across multiple automation cluster heads.</li>
+    </ul>
+    <h3>Circuit Breaker Mechanism</h3>
+    <p>Through this persistent tracking layer, every service profile enforces a maximum retry threshold. If the post-remediation verification check continues to fail and the threshold is reached, the circuit breaker trips into an open state (<b>isLockedOut = true</b>).</p>
+    <p>Once open, the system switches from automated remediation mode to <b>escalation and lockdown mode:</b></p>
+    <ul>
+        <li>All automated execution loops for that resource are explicitly isolated and blocked.</li>
+        <li>High-priority notifications are emitted instantly to out-of-band communication streams (e.g., instant push notifications via webhook notification integrations).</li>
+        <li>The tracking state remains securely locked until a human engineer addresses the underlying fault and transmits a manual clear signal to the daemon.</li>
+    </ul>
+    <img src="assets/sentinel/hook.png" alt="webhook logs capturing an incoming out-of-band 'CIRCUIT BREAKER ACTUATED' urgent notification message">
+    <h2>Observability and Infrastructure Telemetry</h2>
+    <p>An automation platform acting silently in the background is impossible to maintain safely. To maintain high operational trust, the internal mechanics of the remediation engine must be completely transparent to existing engineering stacks. Sentinel structures its telemetry through a dual-engine observability model, segregating macro health performance from micro trace execution.</p>
+    <pre>                  +------------------------------------------+
+                  |       Sentinel Orchestration Engine      |
+                  +------------------------------------------+
+                            /                        \
+                           /                          \
+                          v                            v
+            [Macro Metrics: Pull Model]   [Micro Tracing: Structured Context]
+                          |                            |
+              Prometheus Scraping Layer         OpenTelemetry Core SDK
+                          |                            |
+            - Total Remediation Gauges        - Injected Context Attributes
+            - Lockout Counter Progress          (Service Target, Health State)
+                          |                            |
+                          v                            v
+              [Grafana Dashboard View]       [Zipkin / Jaeger Timeline View]</pre>
+    <h3>Macro Metrics via Pull Architecture</h3>
+    <p>The daemon exposes an isolated metrics server hosting a dedicated metrics collection endpoint. This design allows standard enterprise collection daemons (like Prometheus) to scrape real-time system performance data continuously without causing log file bloating.</p>
+    <p>Rather than printing arbitrary tracking text strings, metrics are tracked via explicit metrics types:</p>
+    <ul>
+        <li><b>Counters:</b> Tracking absolute occurrences of remediation actions and tripped circuit breakers over time.</li>
+        <li><b>Gauges:</b> Displaying the immediate, real-time count of currently locked-out services on the host machine.</li>
+    </ul>
+    <h3>Micro Tracing via Structured Context</h3>
+    <p>For deep dive post-mortem investigation, every incident lifecycle execution is instrumented through the <b>OpenTelemetry standard</b>. When an anomaly is captured, a distinct tracing span is instantiated.</p>
+    <p>Crucially, instead of writing freeform text log entries, runtime attributes are injected directly into the span context as immutable metadata pairs (such as exact target hostname, service identifier, and network health verification boolean returns). This structural layout allows operators to pipeline telemetry streams cleanly into distributed tracing systems like Jaeger or Zipkin, mapping the entire operational event timeline from the initial network failure detection down to the subshell termination signal.</p>
+    <img src="assets/sentinel/graph.png" alt="Prometheus text format endpoint dump showing live counter metrics">
+    <h2>Summary Matrix</h2>
+    <p>The table below provides a summary of the core architectural design shifts embedded inside <b>sentinel</b> compared to legacy platforms scripting methods:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Operational Dimension</th>
+          <th>Traditional Infrastructure Scripting</th>
+          <th>Sentinel Platform Architecture</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Verification</b></td>
+          <td>Fire-and-forget subshell launch. Assumes success on exit code 0.</td>
+          <td><b>Closed-Loop Recheck:</b> Validates state actively after a 2s stabilization pause.</td>
+        </tr>
+        <tr>
+          <td><b>State Memory</b></td>
+          <td>Volatile or stateless. Blind to consecutive execution histories.</td>
+          <td><b>SQLite Persistence:</b> Guarantees state tracking survives hard daemon restarts.</td>
+        </tr>
+        <tr>
+          <td><b>Blast Radius Control</b></td>
+          <td>Blind command injection; raw string evaluation without checks.</td>
+          <td><b>Lexical Parser and Circuit Breaker:</b> Immediate lockouts on compliance breaches.</td>
+        </tr>
+        <tr>
+          <td><b>Process Security</b></td>
+          <td>Infinite run limits; script deadlocks stall thread executors.</td>
+          <td><b>Bounded Contexts:</b> Explicit 5-second kernel execution timeouts.</td>
+        </tr>
+        <tr>
+          <td><b>Telemetry</b></td>
+          <td>Ad-hoc raw string prints to local server files.</td>
+          <td><b>Dual-Engine Observability:</b> Prometheus pulling + structured OpenTelemetry traces.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>See repo <a href="https://github.com/kerochan-web/sentinel">here</a>.</p>
+  </main>
+</body>
+</html>
