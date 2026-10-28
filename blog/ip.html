@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kerochan.lol</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body class="blog">
+  <header>
+    <nav>
+      <a href="../index.html">Home</a>
+      <a href="../services.html">Services</a>
+      <a href="../blog.html">Blog</a>
+      <a href="https://github.com/kerochan-web/">GitHub</a>
+      <a href="../contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Build Your Own IP Geolocation Setup Without the SaaS Tax in an Afternoon</h1>
+    <h2>Problem</h2>
+    <p>When you build an app or a small SaaS, you need to know at some point where IPs are coming from, or whether they're a proxy/VPN. The obvious move is to reach out to one of the services like IPinfo, IP2Location, Maxmind's commercial API, etc., which will gladly sell you geolocation, ASN/org info, and a so-called privacy flag via API.</p>
+
+    <p>However, those APIs aren't really that cheap:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Service</th>
+      <th>Pricing</th>
+      <th>Included Lookups</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><b>IPinfo</b></td>
+      <td>From <b>$49/mo</b> (Basic)</td>
+      <td>150k-500k requests/month depending on plan</td>
+      <td>Extras: ASN, carrier, company, privacy flags, WHOIS, abuse contacts. <a href="https://ipinfo.io/pricing">Pricing</a></td>
+    </tr>
+    <tr>
+      <td><b>IP2Location</b></td>
+      <td>From <b>$32/mo</b> for 100k API calls, or $49/year for DB license</td>
+      <td>100k API calls/month (API)</td>
+      <td>Databases sold separately ($99–$1080/year). <a href="https://www.ip2location.io/pricing">Pricing</a></td>
+    </tr>
+    <tr>
+      <td><b>MaxMind GeoIP2 Precision</b></td>
+      <td>DBs: $34-$134/mo; Web API: $0.0001–$0.002 per query</td>
+      <td>Pay per query (API) or flat DB license</td>
+      <td>Country/City/ISP/Domain lookups, plus fraud detection. <a href="https://www.maxmind.com/en/solutions/ip-geolocation-databases-api-services">Pricing</a></td>
+    </tr>
+    <tr>
+      <td><b>Neutrino API</b></td>
+      <td>From <b>$10/mo</b></td>
+      <td>Free tier: 10-50/day; ~$69/mo for 1.5M API calls</td>
+      <td>Wide scope: IP, user agent parsing, email/phone validation, Tor/VPN detection. <a href="https://www.neutrinoapi.com/plans/">Plans</a></td>
+    </tr>
+  </tbody>
+</table>
+
+    <p>So unless you're doing any kind of <b>real traffic</b>, such as ~10M lookups/month, you're staring at SaaS bills in the <b>hundreds per month</b> just to ask: <i>"What's this IP?"</i>.</p>
+
+    <p>But lo, behind the scenes, most of these services are still running the same public data you can download yourself, i.e., MaxMind's free <b>GeoLite2</b> databases plus community blocklists.</p>
+
+    <p>That's why I built <a href="https://git.kerochan.lol/pollen/file/README.html"><b>pollen</b></a>. A tiny, self-hosted wrapper around GeoLite2 and free VPN/proxy lists. It does the same 80% of what those SaaS APIs do, but runs locally and costs basically nothing lmao.</p>
+
+    <h2>Solution</h2>
+    <p>You don't really need an enterprise contract to answer that question <i>"Where is my IP from? Is it a proxy?"</i>. But you only need three pieces:</p>
+
+    <ol>
+        <li>A geolocation database (MaxMind's <a href="https://dev.maxmind.com/geoip/geolite2-free-geolocation-data">GeoLite2 City</a>).</li>
+        <li>Blocklists (free community-maintained lists of abusive/proxy/VPN IPs).</li>
+        <li>A wrapper script that ties it together and spits JSON.</li>
+    </ol>
+
+    <p>That's it.</p>
+
+    <p>To grab the DB, we need to make a MaxMind account, then download:</p>
+
+    <pre>mkdir -p data
+# Download GeoLite2-City.mmdb.gz
+# then decompress it:
+gunzip -c GeoLite2-City.mmdb.gz > data/GeoLite2-City.mmdb</pre>
+
+    <p>The database is about <b>30 MB</b> on disk and updates once a week.</p>
+
+
+    <p>You then clone the repo and install Lua deps</p>
+    <pre>git clone git://git.kerochan.lol/pollen.git
+cd pollen
+sudo apt install libmaxminddb0 libmaxminddb-dev mmdb-bin lua-dkjson # for Debian
+sudo luarocks install luasocket</pre>
+
+    <p>You then run your first lookup:</p>
+
+    <pre>lua pollen.lua 128.101.101.101</pre>
+
+    <p>Output:</p>
+
+    <pre>{
+ "ip":"128.101.101.101",
+ "country":"United States",
+ "city":"Minneapolis",
+ "org":"Unknown",
+ "blocked":false
+}</pre>
+
+    <p>And because the blocklist module automatically fetches free proxy/VPN lists, you'll also see blocked: true for IPs like <b>193.46.255.103</b> if they're flagged.</p>
+
+    <p>Optionally, if you'd rather hit over HTTP, start the API server:</p>
+
+    <pre>lua pollen.lua --server --port 8080 # or whatever port you want</pre>
+
+    <p>Then you can query it with <b>curl</b>:</p>
+
+    <pre>curl "http://localhost:8080/lookup?ip=129.142.0.0"</pre>
+
+    <p>Output:</p>
+
+    <pre>{
+ "ip": "129.142.0.0",
+ "country": "Denmark",
+ "city": "Copenhagen",
+ "org": "Unknown",
+ "blocked": false
+}</pre>
+
+    <p>The only real reason when a SaaS is worth it, honestly, is when you're running a large consumer product like Netflix, where guaranteed uptime and SLAs are worth the money. Or that you need extra signals beyond GeoLite2 and blocklists (machine-learning fraud detection, behavioral scoring, device fingerprints). Or if you don't want to maintain anything and you're fine to pay rent for the convencience.</p>
+
+    <p>With <b>pollen</b>, you can spin up your own IP lookup + proxy detection pipeline in an afternoon, for free, and serve thousands of queries per second from a $5 VPS.</p>
+
+  </main>
+</body>
+</html>

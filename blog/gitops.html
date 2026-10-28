@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kerochan.lol</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body class="blog">
+  <header>
+    <nav>
+      <a href="../index.html">Home</a>
+      <a href="../services.html">Services</a>
+      <a href="../blog.html">Blog</a>
+      <a href="https://github.com/kerochan-web/">GitHub</a>
+      <a href="../contact.html">Contact</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Building a Zero-Trust, Self-Healing GitOps Platform from Scratch</h1>
+    <p>The jump from basic application development to true platform engineering is steep. Tutorials often teach us how to deploy an app, but they rarely cover what happens when that app crashes randomly at noght. In most entry-level setups, the "solution" is a fragile cron job or a naive shell script that blindly blasts <b>systemctl restart</b> until the server begs for mercy.</p>
+    <p>I wanted to build something different: a unified, production-aware environment that simulates the strict, observable workflows of enterprise Site Reliability Engineering (SRE). The ultimate goal was to build a comprehensive, zero-trust GitOps platform that could detect anomalies, log them into an enterprise ticketing system, automatically safely remediate the issue, and know exactly when to stop trying if things went sideways.</p>
+    <p>Here is the architectural breakdown of how I tied Terraform, Ansible, FluxCD, Kubernetes, and a custom Go-based automation controller into a single, cohesive lifecycle.</p>
+    <h2>Architectural Philosophy</h2>
+    <p>The core mandate of this platform was to eliminate configuration drift and human toil. Instead of treating infrastructure as a collection of isolated scripts, the architecture is divided into a tiered lifecycle where every component is explicitly declared and version-controlled.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Component Tier</th>
+          <th>Tooling Stack</th>
+          <th>The "Why" Behind the Decision</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Cloud Emulation</b></td>
+          <td>LocalStack, Terraform</td>
+          <td>Zero-cost development loop. Sandboxed VPC and DynamoDB replication without AWS billing surprises.</td>
+        </tr>
+        <tr>
+          <td><b>Node Hardening</b></td>
+          <td>Ansible</td>
+          <td>Immutable bare-metal bootstrapping. Enforces least-privilege POSIX configurations before K8s even boots.</td>
+        </tr>
+        <tr>
+          <td><b>State Synchronization</b></td>
+          <td>FluxCD</td>
+          <td>The declarative source of truth. Eliminates manual <b>kubectl</b> mutations in favor of automated Git reconciliation.</td>
+        </tr>
+        <tr>
+          <td><b>Zero-Trust Runtime</b></td>
+          <td>Vault, Istio, Consul</td>
+          <td>Total elimination of hardcoded secrets and enforcement of mutual TLS (mTLS) across all internal microservices.</td>
+        </tr>
+        <tr>
+          <td><b>Operational Control</b></td>
+          <td>Go (<b><a href="https://github.com/kerochan-web/sentinel">sentinel</a></b>), Prometheus</td>
+          <td>Moving from blind bash scripts to a closed-loop controller with state persistence and blast-radius protection.</td>
+        </tr>
+      </tbody>
+    </table>
+    <h2>Laying the Foundation: Terraform and Ansible</h2>
+    <p>Before deploying a single container, the underlying primitives had to be secure.</p>
+    <p>The cloud tier relies on <b>Terraform</b> pointing to a <b>LocalStack</b> edge node. This creates a high-fidelity local AWS mock environment, enforcing strict VPC topologies (e.g., <b>10.0.0.0/16</b>) and deny-by-default security groups.</p>
+    <p>Once the network is established, <b>Ansible</b> takes over host configuration. Taking a "learn by doing" approach to systems administration means understanding that security starts at the OS level. Ansible provisions the target nodes by generating unprivileged system accounts (<b>/bin/false</b>), enforcing strict directory permissions (<b>0755</b>), and laying down the PostgreSQL and NGINX binaries seamlessly.</p>
+    <p>The GitOps Loop and Zero-Trust Secrets</p>
+    <p>With the nodes hardened, the platform hands control over to <b>FluxCD</b>. From this point on, human operators no longer touch the cluster directly.</p>
+    <p>Flux tracks the repository and bootstraps the infrastructure in a strict dependency order. But the most critical architectural decision here was implementing <b>HashiCorp Vault</b> via a mutating webhook injector, completely bypassing the standard (and often insecure) Kubernetes Secrets model.</p>
+    <p>When the core FastAPI application boots up, it doesn't load a <b>.env</b> file. Instead:</p>
+    <ol>
+        <li>Vault intercepts the pod creation.</li>
+        <li>An init-container fetches the database credentials dynamically.</li>
+        <li>The secret is templated into an ephemeral, in-memory volume.</li>
+        <li>The application shell wrapper sources the credential exactly at runtime (<b>if [ -f /vault/secrets/db-env ]; then . /vault/secrets/db-env; fi; uvicorn main...</b>).</li>
+    </ol>
+    <p>Coupled with <b>Istio</b> enforcing mTLS through an Envoy sidecar proxy, the application runtime is effectively a zero-trust fortress.</p>
+    <h2>The Crown Jewel: sentinel (Closed-Loop Automation)</h2>
+    <p>The biggest challenge in operations is fixing failure safely, rather than just detecting it. To handle this, I built <b><a href="https://kerochan.lol/blog/sentinel.html">sentinel</a></b>, a custom Go daemon designed to replace naive remediation scripts with a deterministic, enterprise-grade controller.</p>
+    <p>Integrating <b>sentinel</b> into the GitOps cluster required giving it strict, read-only RBAC permissions to monitor pod and deployment health. When Sentinel detects a failure, the workflow is entirely automated:</p>
+    <ul>
+        <li><b>Enterprise ITSM Simulation</b>: <b>sentinel</b> dispatches a payload over the wire to a mock ServiceNow endpoint, generating a trackable ticket (<b>INC0001001</b>).</li>
+        <li><b>Lexical Safety Boundaries</b>: Before executing a rollout or restart, <b>sentinel</b> parses the commanded shell string. If a typo injects a dangerous command (<b>rm -rf</b>, <b>dd</b>), execution aborts instantly.</li>
+        <li><b>Closed-Loop Verification</b>: After triggering a <b>kubectl rollout undo</b>, <b>sentinel</b> doesn't just assume victory. It pauses for a stabilization period and actively probes the network endpoint. If it returns <b>200 OK</b>, the ITSM ticket is marked resolved.</li>
+        <li><b>The Lockout Engine</b>: If the service continues to crash, <b>sentinel</b> increments a persistent counter in an embedded SQLite database. Once the retry threshold is breached, the circuit breaker trips open, permanently halting automation to prevent infinite restart loops, and pushing an instant alert to the on-call engineer via <b>ntfy.sh</b>.</li>
+    </ul>
+    <h2>Observability: Seeing the Unseen</h2>
+    <p>A self-healing platform is useless if it's a black box. By integrating the <b>kube-prometheus-stack</b> into the Flux loop, the platform constantly scrapes raw runtime metrics.</p>
+    <p><b>sentinel</b> itself is heavily instrumented. It exposes a native <b>/metrics</b> endpoint for Prometheus to track active lockouts and exact retry execution counts. Under the hood, OpenTelemetry traces pipe structured JSON context logs to standard output, bridging the gap between a macro-level alert and a micro-level system trace.</p>
+    <h2>Final Thoughts</h2>
+    <p>Building this platform reinforced a vital lesson: <b>operations is software engineering</b>.</p>
+    <p>Transitioning a collection of independent repositories into a cohesive, Git-managed, self-healing platform requires moving away from the mindset of "just getting it running" and toward "ensuring it runs securely, autonomously, and observably." By leveraging Go for custom controllers and adopting rigid GitOps methodologies, we can build platforms that actively protect applications, not just host them.</p>
+    <p>See repo <a href="https://github.com/kerochan-web/self-healing-gitops-platform">here</a>.</p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kerochan.lol</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body class="blog">
+  <header>
+    <nav>
+      <a href="../index.html">Home</a>
+      <a href="../services.html">Services</a>
+      <a href="../blog.html">Blog</a>
+      <a href="https://github.com/kerochan-web/">GitHub</a>
+      <a href="../contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Rebuilding a 180MB broken ecommerce site into a 37MB fast custom PHP system</h1>
+    <img src="assets/php/chehalem.png" alt="Banner image">
+	<h2>Client</h2>
+	<p><a href="https://chehalemgreen.net/">Chehalem Green</a> - a handcrafted sustainable wood products business</p>
+    <h2>Project Overview</h2>
+    <p>Chehalem Green originally ran on a heavily modified legacy PHP system that had grown unstable over time. The site was difficult to maintain, slow to edit, and prone to breaking from even basic changes.</p>
+    <p>I was brought in to audit the system and help stabilize it. After a technical review, it became clear that the existing architecture was beyond repair. So we rebuilt it from the ground up.</p>
+	<h2>Problems with the original system</h2>
+    <p>Before the rebuild, the site suffered from:</p>
+    <ul>
+        <li>Extremely large and bloated file size (180+ MB, 3000+ files)</li>
+        <li>Redundant templates and conflicting PHP logic (1000+ violations from static analysis)</li>
+        <li>Broken and fragile navigation</li>
+        <li>Unused CSS and inconsistent styling</li>
+        <li>Unreliable page rendering</li>
+        <li>Difficult administrative workflow</li>
+        <li>Risk of crashes from simple edits</li>
+    </ul>
+	<p>Some images that demonstrate the old site:</p>
+    <img src="assets/php/nav.png" alt="Main page">
+    <img src="assets/php/cat.png" alt="A category">
+    <img src="assets/php/cat2.png" alt="Categories page">
+    <img src="assets/php/search.png" alt="Search page">
+	<p>The system had reached a point where improving or extending it would only make it more unstable.</p>
+    <h2>My Approach</h2>
+    <p>I barely knew anything about PHP, other than simple backend stuff or PHPMailer. Before I received the repo over FTP, I spun up a quick local LAMP stack (PHP + MariaDB) that handles image uploads. It was kind of like a warmup to me.</p>
+    <p>When I received the repo, I did it on a VM for security reasons, then I copied everything to my local machine. The project was so huge and had many files that I didn't know where to start auditing and fixing it.</p>
+    <p>Before I even started anything, I noticed that certain pages, such as <b>product.php</b> can break the whole site, so I flagged the client about that while I started to audit the codebase, mainly to recognize redundancies and file structure so I can either minimize what I've got or build almost everything from the ground up.</p>
+    <p>I'd found out that the site was very fragile, with a primitive non-standard MVC-style architecture, <b>phpmetrics</b> reported 1035 violations including 505 errors, multiple <b>exec()</b> calls were found throughout the codebase, many obsolete + unused + empty files, and 59% of the project's size contained only images, some of which were duplicated.</p>
+    <p>That's why I suggested a clean rebuild, which the client had agreed on.</p>
+    <h2>Solution</h2>
+    <p>I designed and built a completely new custom PHP architecture focused on:</p>
+    <ul>
+        <li>Simplicity</li>
+        <li>Maintainability</li>
+        <li>Performance</li>
+		<li>Minimal dependencies</li>
+		<li>Clean separation of logic and templates</li>
+    </ul>
+	<p>So we cloned the system's core functionality and layout, instead of fixing the broken one, into a fresh and lightweight codebase.</p>
+	<h2>What I Built</h2>
+    <ul>
+        <li>Custom PHP core (no bulky CMS or plugins)</li>
+        <li>Clean, minimal templating structure</li>
+        <li>Dynamic product pages</li>
+		<li>Admin panel for product management</li>
+		<li>User authentication</li>
+		<li>Contact system</li>
+		<li>Payment system integration (Stripe / PayPal ready)</li>
+		<li>Optimized database structure</li>
+		<li>Front-end rebuild for speed and responsiveness</li>
+    </ul>
+	<h2>Results</h2>
+	<p>The final system:</p>
+    <ul>
+        <li>Reduced the website size from <b>180MB -> 37MB</b></li>
+        <li>Loaded pages significantly faster</li>
+        <li>Eliminated redundant and unused code</li>
+		<li>Made editing and maintenance substantially easier</li>
+		<li>Produced a stable architecture ready for long-term growth</li>
+    </ul>
+    <p>Note: I started by building the frontend mockups as static HTML files first, then I moved to the backend and chose <b>SQLite</b> for its simplicity, but I went back migrating to <b>MySQL</b> for client requirements (to use phpMyAdmin). I then did some small layout cleanups, hosted the site locally on <b>https://kerochan.lol:8000</b>. I finally moved to the backend, where I rewrote cart, auth, and added Stripe integration which hadn't existed before. My backend build was also deployed on a staging site of Chehalem Green with its own credentials, before it was finally done.</p>
+	<h2>Client Testimonial</h2>
+	<p><i>"Kerochan scripted a completely new custom PHP website identical in form and function to the old site, but without the redundant files, templates, and broken logic.</i></p>
+	<p><i>Pages load faster, images display better, and the system is now easy to edit and maintain.</i></p>
+	<p><i>I have worked with dozens of developers over the years and Kerochan is by far the most efficient and easiest to communicate with."</i></p>
+	<h2>Tech Stack</h2>
+	<ul>
+		<li>PHP (Custom Core)</li>
+		<li>MySQL</li>
+		<li>HTML / CSS / Tailwind</li>
+		<li>JavaScript</li>
+		<li>Stripe API</li>
+		<li>FTP / Server deployment</li>
+	</ul>
+	<h2>My Role</h2>
+	<ul>
+		<li>System auditing</li>
+		<li>Architecture redesign</li>
+		<li>Backend development</li>
+		<li>Frontend rebuild</li>
+		<li>Database design</li>
+		<li>Payment integration</li>
+		<li>Deployment support</li>
+	</ul>
+	<h2>Timeline</h2>
+	<p>Several weeks of iterative development, testing and collaboration.</p>
+	<h2>Summary</h2>
+	<p>This project focused on removing complexity instead of adding features. We achieved better performance and long-term flexibility for a growing ecommerce business by rebuilding the system from scratch.</p>
+  </main>
+</body>
+</html>

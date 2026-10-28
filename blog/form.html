@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kerochan.lol</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body class="blog">
+  <header>
+    <nav>
+      <a href="../index.html">Home</a>
+      <a href="../services.html">Services</a>
+      <a href="../blog.html">Blog</a>
+      <a href="https://github.com/kerochan-web/">GitHub</a>
+      <a href="../contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Using a Minimal Privacy-Friendly Alternative to Google Forms</h1>
+    <h2>Problem</h2>
+    <p>Most small businesses stick a Google Form or Wix widget on their website, which means that it's bloated and that businesses couldn't really control the data due to it getting sent through some third-party host.</p>
+    <h2>Solution</h2>
+    <p>I built a <b>tiny self-hosted form using PHP and SMTP</b> (with PHPMailer) that doesn't require any JS, where the submissions go directly into the owner's existing inbox. It can run under 25MB of RAM on cheap shared hosting or even a Raspberry Pi. The script can be plugged into <i>any</i> email provider.</p>
+    <p>In this example, I ran this PHP server on <b>http://localhost:8080</b>, and I submit the form to the email of the customer, which would be sent to the owner that's written in the PHP script I made:</p>
+    <img src="assets/form/php.png" alt="Running php -S localhost:8080">
+    <img src="assets/form/form.png" alt="Screenshot of the Contact Us page">
+    <img src="assets/form/example.png" alt="Filling info on the Contact Us page">
+    <img src="assets/form/success.png" alt="Page saying: Message sent successfully!">
+    <img src="assets/form/received.png" alt="Receiving  an email with our info">
+    <p>Let's also check <b>htop</b> to see how much RAM this PHP server uses:</p>
+    <pre>PID   USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+17882 lain      20   0  201352  22172  16084 S   0.0   0.3   0:00.03 php</pre>
+  </main>
+</body>
+</html>

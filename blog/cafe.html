@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kerochan.lol</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body class="blog">
+  <header>
+    <nav>
+      <a href="../index.html">Home</a>
+      <a href="../services.html">Services</a>
+      <a href="../blog.html">Blog</a>
+      <a href="https://github.com/kerochan-web/">GitHub</a>
+      <a href="../contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>From Bloated WordPress to Lightning-Fast Static Site</h1>
+    <img src="assets/cafe/coffee.jpg" alt="Banner image">
+    <h2>Problem</h2>
+    <p>A local (hypothetical) café had a WordPress site that looked fine at first glance but was painfully slow to use. The homepage was nearly 3MB, loaded in 3 seconds, and was running on around 5 plugins.</p>
+    <p>Slow sites often frustrate customers and drive them away before they even see the menu.</p>
+    <p>So, I decided to rebuild the homepage as a static site to test how much performance could improve without changing the design much.</p>
+    <p>This is what I've done:</p>
+    <ul>
+        <li>Audited the site using Google Lighthouse (on Chromium browser) to capture baseline performance metrics.</li>
+        <li>Exported the content (text + images) from WordPress.</li>
+        <li>Rebuilt the homepage in plain HTML and CSS (no JavaScript or unnecessary assets).</li>
+        <li>Optimized images by compressing and resizing them for web (using ImageMagick and <b>jpegoptim</b>).</li>
+        <li>Tested locally using a lightweight server (Python's <b>http.server</b>).</li>
+    </ul>
+    <h2>Results</h2>
+    <p>The difference was (somewhat) dramatic:</p>
+    <ul>
+        <li>Page size dropped from 3MB -> 140KB</li>
+        <li>Load time improved from ~3s -> &lt;1s</li>
+        <li>Lighthouse performance score jumped from 71 -> 100</li>
+    </ul>
+    <h3>Before:</h3>
+    <img src="assets/cafe/before.jpg" alt="Lighthouse stats before optimization">
+    <h3>After:</h3>
+    <img src="assets/cafe/after.jpg" alt="Lighthouse stats after optimization">
+    <p>You can also check out the <a href="assets/cafe/before.html">before</a> and <a href="assets/cafe/after.html">after</a> Lighthouse reports yourself, along with the result <a href="assets/cafe/index.html">static page</a> if you want.</p>
+    <p>With fewer moving parts, the site also became simpler to host and more secure (no WordPress plugins or PHP backend to maintain).</p>
+  </main>
+</body>
+</html>

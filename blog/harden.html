@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kerochan.lol</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="stylesheet" href="../style.css">
+<style>
+.dotted-underline {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: white;
+  text-decoration-thickness: from-font;
+}
+</style>
+</head>
+<body class="blog">
+  <header>
+    <nav>
+      <a href="../index.html">Home</a>
+      <a href="../services.html">Services</a>
+      <a href="../blog.html">Blog</a>
+      <a href="https://github.com/kerochan-web/">GitHub</a>
+      <a href="../contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Securing a Debian Server From Default Install to Production-Ready</h1>
+    <h2>Problem</h2>
+    <p>A small business had its server exposed to the internet with barely any protection. The system was running with defaults and no firewall was configured. Small companies who don't have a sysadmin have such an common setup like this, which leaves them wide open to attackers.</p>
+    <p><b>Did you know:</b> Port 22 is one of the <a href="assets/harden/ports.webp">most scanned ports on the internet</a>.</p>
+    <p>I set up a <b>Debian 13 "trixie"</b> VM for this example on VirtualBox with SSH enabled. After install, this is what I saw:</p>
+    <pre>
+lain@navi:~$ ss -tuln
+Netid       State       Recv-Q      Send-Q          Local Address:Port          Peer Address:Port
+udp         UNCONN      0           0               0.0.0.0:5353                0.0.0.0:*
+udp         UNCONN      0           0               0.0.0.0:44410               0.0.0.0:*
+udp         UNCONN      0           0               [::]:57048                  [::]:*
+udp         UNCONN      0           0               [::]:5353                   [::]:*
+tcp         LISTEN      0           4096            127.0.0.1:631               0.0.0.0:*
+tcp         LISTEN      0           128             0.0.0.0:22                  0.0.0.0:*
+tcp         LISTEN      0           128             [::]:22                     [::]:*
+tcp         LISTEN      0           4096            [::1]:631                   [::]:*
+lain@navi:~$ grep -E '^(PermitRootLogin|PasswordAuthentication)' /etc/ssh/sshd_config
+lain@navi:~$ sudo iptables -L -n
+Chain INPUT (policy ACCEPT)
+target     prot opt source               destination
+Chain FORWARD (policy ACCEPT)
+target     prot opt source               destination
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination
+lain@navi:~$ systemctl status unattended-upgrades
+<font color="red">Unit unattended-upgrades.service could not be found.</font>
+</pre>
+    <p><b>Explanation:</b> Respectively, command prompts hint that SSH is wide open on port 22, default config allowing root login (it's commented by default), no firewall rules exist, and unattended updates disabled.</p>
+    <h2>Solution</h2>
+    <p>We'll just need to do some basic hardening with a few simple steps:</p>
+    <ol>
+        <li>Moved SSH to a non-standard port (2222), restarting and testing SSH with <b>ssh -p 2222 lain@navi</b></li>
+        <li>Disabled root SSH login in <b>/etc/ssh/sshd_config</b></li>
+        <li>Enabled a firewall with UFW</li>
+        <li>Installed and enabled security updates</li>
+    </ol>
+    <p>So now, we get these outputs using the same commands we've tried before:</p>
+<pre>
+lain@navi:~$ ss -tuln
+Netid   State    Recv-Q   Send-Q     Local Address:Port      Peer Address:Port  
+udp     UNCONN   0        0                0.0.0.0:40623          0.0.0.0:*     
+udp     UNCONN   0        0                0.0.0.0:5353           0.0.0.0:*     
+udp     UNCONN   0        0                   [::]:36504             [::]:*     
+udp     UNCONN   0        0                   [::]:5353              [::]:*     
+tcp     LISTEN   0        128              0.0.0.0:2222           0.0.0.0:*     
+tcp     LISTEN   0        4096           127.0.0.1:631            0.0.0.0:*     
+tcp     LISTEN   0        128                 [::]:2222              [::]:*     
+tcp     LISTEN   0        4096               [::1]:631               [::]:*     
+lain@navi:~$ grep -E '^(PermitRootLogin|PasswordAuthentication)' /etc/ssh/sshd_config
+PermitRootLogin no
+PasswordAuthentication yes
+lain@navi:~$ sudo ufw status verbose
+Status: active
+Logging: on (low)
+Default: deny (incoming), allow (outgoing), disabled (routed)
+New profiles: skip
+
+To                         Action      From
+--                         ------      ----
+2222/tcp                   ALLOW IN    Anywhere                  
+2222/tcp (v6)              ALLOW IN    Anywhere (v6)             
+
+lain@navi:~$ systemctl status unattended-upgrades
+<font color="lime">●</font> unattended-upgrades.service - Unattended Upgrades Shutdown
+     Loaded: loaded (<span class="dotted-underline">/usr/lib/systemd/system/unattended-upgrades.service</span>; <font color="lime">enabled</font>; preset: <font color="lime">enabled</font>)
+     Active: <font color="lime">active (running)</font> since Thu 2025-09-04 12:31:43 CET; 1min 50s ago
+ Invocation: f94b8a91656541c0a6c91892b20ff6f0
+       Docs: <span class="dotted-underline">man:unattended-upgrade(8)</span>
+   Main PID: 927 (unattended-upgr)
+      Tasks: 2 <font color="gray">(limit: 2297)</font>
+     Memory: 27.2M (peak: 29.2M)
+        CPU: 361ms
+     CGroup: /system.slice/unattended-upgrades.service
+             └─<font color="gray">927 /usr/bin/python3 /usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal</font>
+
+Warning: some journal files were not opened due to insufficient permissions.
+</pre>
+    <p>We can also add some monitoring to know when things go down. For that we'll deploy my own tiny Lua-based tool <a href="https://git.kerochan.lol/servemon/file/README.html"><b>servemon</b></a>.</p>
+    <p>We start our HTTP server and add it to that <b>servemon</b>:</p>
+<pre>python3 -m http.server 8080
+luajit servemon.lua add localweb http://127.0.0.1:8080
+</pre>
+    <p>Then we run the monitor once and output when it was up/down:</p>
+<pre>
+lain@navi:~/servemon$ luajit servemon.lua add localweb http://127.0.0.1:8080
+Site added:	localweb	http://127.0.0.1:8080
+lain@navi:~/servemon$ luajit servemon.lua run --once
+2025-09-05 12:23:09 | localweb | http://127.0.0.1:8080 | <font color="green">OK</font>
+2025-09-05 12:23:09 | localweb | http://127.0.0.1:8080 | <font color="green">OK</font>
+2025-09-05 12:23:09 | localweb | http://127.0.0.1:8080 | <font color="green">OK</font>
+lain@navi:~/servemon$ luajit servemon.lua run --once
+2025-09-05 12:23:44 | localweb | http://127.0.0.1:8080 | <font color="red">DOWN</font>
+2025-09-05 12:23:44 | localweb | http://127.0.0.1:8080 | <font color="red">DOWN</font>
+2025-09-05 12:23:44 | localweb | http://127.0.0.1:8080 | <font color="red">DOWN</font>
+lain@navi:~/servemon$ luajit servemon.lua summary
+=== Server Summary Report ===
+2025-09-05 12:24:10 | localweb | http://127.0.0.1:8080 | <font color="red">DOWN</font>
+<font color="red">DOWN</font> - localweb (http://127.0.0.1:8080) - Uptime: 65.5%
+2025-09-05 12:24:10 | localweb | http://127.0.0.1:8080 | <font color="red">DOWN</font>
+<font color="red">DOWN</font> - localweb (http://127.0.0.1:8080) - Uptime: 63.3%
+2025-09-05 12:24:10 | localweb | http://127.0.0.1:8080 | <font color="red">DOWN</font>
+<font color="red">DOWN</font> - localweb (http://127.0.0.1:8080) - Uptime: 61.3%</pre>
+    <p><b>servemon</b> logs results into SQLite (<b>monitor.db</b>) and can send alerts via Telegram or ntfy.sh if desired.</p>
+  </main>
+</body>
+</html>
